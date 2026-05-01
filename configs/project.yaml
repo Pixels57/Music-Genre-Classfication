@@ -1,0 +1,167 @@
+project:
+  random_state: 42
+  experiment_name: music_genre_classification
+
+paths:
+  spotify_raw: data/raw/spotify_tracks.csv
+  fma_tracks_raw: data/raw/fma_tracks.csv
+  fma_echonest_raw: data/raw/fma_echonest.csv
+  gtzan_raw: data/raw/gtzan_features.csv
+  integrated_data: data/interim/integrated_tracks.csv
+  validation_report: reports/validation_report.json
+  processed_data: data/processed/model_ready.csv
+  split_dir: data/processed/splits
+  model_dir: models
+  metrics_path: reports/evaluation_metrics.json
+  mlflow_tracking_uri: mlruns
+
+data:
+  target: genre_family
+  source_column: source_dataset
+  spotify_source_name: spotify
+  min_rows_after_cleaning: 3000
+  min_features_after_cleaning: 7
+  duration_min_ms: 30000
+  duration_max_ms: 1200000
+  test_size: 0.15
+  validation_size: 0.15
+  class_min_count: 10
+
+features:
+  numeric:
+    - popularity
+    - duration_ms
+    - danceability
+    - energy
+    - key
+    - loudness
+    - mode
+    - speechiness
+    - acousticness
+    - instrumentalness
+    - liveness
+    - valence
+    - tempo
+    - time_signature
+    - energy_acoustic_ratio
+    - dance_valence_score
+    - loudness_normalized
+  categorical:
+    - explicit
+    - duration_bucket
+    - speechiness_tier
+    - major_minor_flag
+    - source_dataset
+
+models:
+  train:
+    - dummy
+    - logistic_regression
+    - random_forest
+    - gradient_boosting
+    - linear_svm
+  grids:
+    logistic_regression:
+      C: [1.0]
+    random_forest:
+      n_estimators: [80]
+      max_depth: [12]
+    gradient_boosting:
+      n_estimators: [50]
+      learning_rate: [0.08]
+      max_depth: [3]
+    linear_svm:
+      C: [1.0]
+
+genre_mapping:
+  pop:
+    - pop
+    - k-pop
+    - j-pop
+    - cantopop
+    - disney
+    - indie-pop
+    - synthpop
+  rock:
+    - rock
+    - alt-rock
+    - alternative
+    - hard-rock
+    - punk
+    - grunge
+    - emo
+    - metal
+    - heavy-metal
+    - black-metal
+    - death-metal
+    - grindcore
+    - guitar
+    - j-rock
+  electronic:
+    - electronic
+    - electro
+    - edm
+    - dance
+    - club
+    - house
+    - deep-house
+    - chicago-house
+    - detroit-techno
+    - techno
+    - minimal-techno
+    - trance
+    - dubstep
+    - drum-and-bass
+    - breakbeat
+    - hardstyle
+    - garage
+    - idm
+    - disco
+    - ambient
+    - chill
+  hip_hop_rnb:
+    - hip-hop
+    - r-n-b
+    - soul
+    - funk
+    - groove
+  acoustic_folk_country:
+    - acoustic
+    - folk
+    - country
+    - bluegrass
+    - honky-tonk
+    - singer-songwriter
+  jazz_blues_classical:
+    - jazz
+    - blues
+    - classical
+    - opera
+    - piano
+  latin_world:
+    - latin
+    - salsa
+    - brazil
+    - forro
+    - afrobeat
+    - reggae
+    - dancehall
+    - world-music
+    - indian
+    - iranian
+    - spanish
+    - french
+    - german
+    - british
+  mood_context:
+    - happy
+    - sad
+    - party
+    - study
+    - children
+    - comedy
+    - anime
+    - gospel
+    - goth
+    - new-age
+    - dub
