@@ -23,7 +23,7 @@ evaluate:
 pipeline: data train evaluate
 
 dashboard:
-	powershell -NoProfile -Command "$$env:STREAMLIT_BROWSER_GATHER_USAGE_STATS='false'; $(POETRY) run streamlit run src/music_genre/dashboard.py"
+	$(POETRY) run streamlit run src/music_genre/dashboard.py
 
 serve: dashboard
 

@@ -56,10 +56,8 @@ def train_models(config_path: str | Path = "configs/project.yaml") -> dict[str, 
     import mlflow
 
     config = load_config(config_path)
-    processed_path = Path(config["paths"]["processed_data"])
     split_dir = Path(config["paths"]["split_dir"])
-    if not processed_path.exists() or not split_dir.exists():
-        run_feature_pipeline(config_path)
+    run_feature_pipeline(config_path)
 
     train = pd.read_csv(split_dir / "train.csv")
     validation = pd.read_csv(split_dir / "validation.csv")
