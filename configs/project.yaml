@@ -46,11 +46,27 @@ features:
     - energy_acoustic_ratio
     - dance_valence_score
     - loudness_normalized
+    - tempo_normalized
+    - energy_danceability_score
+    - acoustic_instrumental_score
+    - speech_energy_score
+    - valence_energy_score
+    - liveness_energy_score
+    - acoustic_energy_balance
+    - tempo_energy_score
+    - popularity_energy_score
+    - duration_minutes
   categorical:
     - explicit
     - duration_bucket
     - speechiness_tier
     - major_minor_flag
+    - tempo_bucket
+    - popularity_bucket
+    - energy_bucket
+    - acousticness_bucket
+    - instrumentalness_flag
+    - valence_bucket
     - source_dataset
 
 models:
@@ -64,8 +80,8 @@ models:
     logistic_regression:
       C: [1.0]
     random_forest:
-      n_estimators: [80]
-      max_depth: [12]
+      n_estimators: [100]
+      max_depth: [null]
     gradient_boosting:
       n_estimators: [50]
       learning_rate: [0.08]
@@ -78,10 +94,16 @@ genre_mapping:
     - pop
     - k-pop
     - j-pop
+    - j-idol
     - cantopop
+    - mandopop
     - disney
     - indie-pop
+    - power-pop
+    - pop-film
+    - synth-pop
     - synthpop
+    - show-tunes
   rock:
     - rock
     - alt-rock
@@ -97,6 +119,14 @@ genre_mapping:
     - grindcore
     - guitar
     - j-rock
+    - hardcore
+    - indie
+    - industrial
+    - metalcore
+    - psych-rock
+    - punk-rock
+    - rock-n-roll
+    - rockabilly
   electronic:
     - electronic
     - electro
@@ -117,14 +147,23 @@ genre_mapping:
     - garage
     - idm
     - disco
+    - j-dance
+    - progressive-house
+    - trip-hop
+  ambient_chill:
     - ambient
     - chill
+    - sleep
+    - study
+    - new-age
   hip_hop_rnb:
     - hip-hop
+    - hiphop
     - r-n-b
     - soul
     - funk
     - groove
+    - reggaeton
   acoustic_folk_country:
     - acoustic
     - folk
@@ -132,36 +171,51 @@ genre_mapping:
     - bluegrass
     - honky-tonk
     - singer-songwriter
+    - songwriter
   jazz_blues_classical:
     - jazz
     - blues
     - classical
     - opera
     - piano
+    - instrumental
   latin_world:
     - latin
+    - latino
     - salsa
     - brazil
     - forro
+    - mpb
+    - pagode
+    - samba
+    - sertanejo
+    - tango
     - afrobeat
     - reggae
     - dancehall
+    - dub
+    - ska
     - world-music
     - indian
     - iranian
+    - malay
     - spanish
     - french
     - german
     - british
+    - swedish
+    - turkish
+    - international
   mood_context:
     - happy
     - sad
     - party
-    - study
     - children
+    - kids
     - comedy
     - anime
     - gospel
     - goth
-    - new-age
-    - dub
+    - romance
+    - old-time-historic
+    - experimental

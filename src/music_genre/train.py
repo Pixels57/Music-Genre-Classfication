@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import nullcontext
 import itertools
 import json
 import logging
@@ -53,7 +54,11 @@ def _mlflow_tracking_uri(uri: str | Path) -> str:
 
 
 def train_models(config_path: str | Path = "configs/project.yaml") -> dict[str, Any]:
-    import mlflow
+    try:
+        import mlflow
+    except ModuleNotFoundError:
+        mlflow = None
+        LOGGER.warning("MLflow is not installed; training will run without experiment logging.")
 
     config = load_config(config_path)
     split_dir = Path(config["paths"]["split_dir"])
@@ -68,8 +73,9 @@ def train_models(config_path: str | Path = "configs/project.yaml") -> dict[str, 
     x_validation = validation[features]
     y_validation = validation[target]
 
-    mlflow.set_tracking_uri(_mlflow_tracking_uri(config["paths"]["mlflow_tracking_uri"]))
-    mlflow.set_experiment(config["project"]["experiment_name"])
+    if mlflow is not None:
+        mlflow.set_tracking_uri(_mlflow_tracking_uri(config["paths"]["mlflow_tracking_uri"]))
+        mlflow.set_experiment(config["project"]["experiment_name"])
     model_dir = ensure_dir(config["paths"]["model_dir"])
 
     results: list[dict[str, Any]] = []
@@ -79,7 +85,8 @@ def train_models(config_path: str | Path = "configs/project.yaml") -> dict[str, 
             run_name = f"{model_name}_{run_index}"
             pipeline = build_model_pipeline(model_name, config, params)
             LOGGER.info("Training %s with params %s.", model_name, params)
-            with mlflow.start_run(run_name=run_name):
+            run_context = mlflow.start_run(run_name=run_name) if mlflow is not None else nullcontext()
+            with run_context:
                 pipeline.fit(x_train, y_train)
                 predictions = pipeline.predict(x_validation)
                 probabilities = _predict_proba_if_available(pipeline, x_validation)
@@ -90,12 +97,13 @@ def train_models(config_path: str | Path = "configs/project.yaml") -> dict[str, 
                     _classes_if_available(pipeline),
                 )
 
-                mlflow.log_param("model_name", model_name)
-                mlflow.log_params(params)
-                mlflow.log_param("features", ",".join(features))
-                for metric_name, value in metrics.items():
-                    if value == value:
-                        mlflow.log_metric(metric_name, value)
+                if mlflow is not None:
+                    mlflow.log_param("model_name", model_name)
+                    mlflow.log_params(params)
+                    mlflow.log_param("features", ",".join(features))
+                    for metric_name, value in metrics.items():
+                        if value == value:
+                            mlflow.log_metric(metric_name, value)
 
                 report = classification_report(
                     y_validation,
@@ -113,9 +121,11 @@ def train_models(config_path: str | Path = "configs/project.yaml") -> dict[str, 
                 for artifact_name, artifact_content in artifacts.items():
                     artifact_path = ensure_parent(Path("reports") / artifact_name)
                     artifact_path.write_text(json.dumps(artifact_content, indent=2), encoding="utf-8")
-                    mlflow.log_artifact(str(artifact_path))
+                    if mlflow is not None:
+                        mlflow.log_artifact(str(artifact_path))
 
-                mlflow.sklearn.log_model(pipeline, artifact_path="model")
+                if mlflow is not None:
+                    mlflow.sklearn.log_model(pipeline, artifact_path="model")
                 model_path = model_dir / f"{run_name}.joblib"
                 joblib.dump(pipeline, model_path)
                 results.append(
