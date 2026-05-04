@@ -194,8 +194,11 @@ def clean_tracks(data: pd.DataFrame, config: dict[str, Any]) -> pd.DataFrame:
 
 
 def build_validation_report(raw: pd.DataFrame, cleaned: pd.DataFrame, config: dict[str, Any]) -> dict[str, Any]:
+    from music_genre.features import add_engineered_features
+
     feature_columns = config["features"]["numeric"] + config["features"]["categorical"]
-    present_features = [column for column in feature_columns if column in cleaned.columns]
+    model_ready_preview = add_engineered_features(cleaned)
+    present_features = [column for column in feature_columns if column in model_ready_preview.columns]
     report = {
         "raw_rows": int(len(raw)),
         "cleaned_rows": int(len(cleaned)),
@@ -249,20 +252,6 @@ def main() -> None:
     configure_logging()
     args = parse_args()
     run_data_pipeline(args.config)
-
-
-def validate_main() -> None:
-    configure_logging()
-    args = parse_args()
-    config = load_config(args.config)
-    data_path = Path(config["paths"]["integrated_data"])
-    if not data_path.exists():
-        raise FileNotFoundError(f"Integrated data not found: {data_path}. Run `make data` first.")
-    cleaned = pd.read_csv(data_path)
-    report = build_validation_report(cleaned, cleaned, config)
-    report_path = ensure_parent(config["paths"]["validation_report"])
-    report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
-    LOGGER.info("Validation complete: %s.", report_path)
 
 
 if __name__ == "__main__":

@@ -39,7 +39,6 @@ poetry install
 
 ```powershell
 make data       # ingest, clean, integrate, and validate raw datasets
-make validate   # regenerate validation report from integrated data
 make train      # engineer features, split data, train models, log MLflow runs
 make evaluate   # evaluate the best model on test/external splits
 make dashboard  # open the Streamlit dashboard
@@ -58,8 +57,40 @@ poetry run music-genre-evaluate --config configs/project.yaml
 Run the complete data, training, evaluation, and dashboard flow with:
 
 ```powershell
-make pipeline-serve
+make serve
 ```
+
+## CI/CD
+
+GitHub Actions is configured in `.github/workflows/ci.yml`.
+
+On pull requests and pushes to `main`, the CI job:
+
+- validates `pyproject.toml` and `poetry.lock`
+- installs dependencies with Poetry
+- runs Ruff linting
+- runs pytest with coverage
+- smoke-tests the CLI entry points
+- builds the Python package
+- uploads `coverage.xml` and `dist/` as CI artifacts
+
+On pushes to `main` and manual workflow runs, the delivery job also uploads a submission artifact named `music-genre-classification-submission`. The artifact contains the code, configs, reports written in Markdown, tests, README, and project metadata. Large local outputs such as raw datasets, generated model files, MLflow runs, and generated JSON reports are excluded because they can be recreated with `make serve`.
+
+Before pushing, run the local equivalent of the main CI checks:
+
+```powershell
+make ci
+```
+
+To test the workflow on GitHub:
+
+1. Commit and push the branch.
+2. Open the repository on GitHub.
+3. Go to **Actions**.
+4. Open the **CI/CD** workflow run.
+5. Confirm that **Lint, test, and build** passes.
+6. If the run is on `main` or manually triggered, confirm that **Build submission artifact** passes.
+7. Download artifacts from the workflow summary to inspect `ci-artifacts` and `music-genre-classification-submission`.
 
 ## Outputs
 

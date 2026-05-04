@@ -35,7 +35,6 @@ def test_small_training_pipeline_runs() -> None:
                 "duration_bucket",
                 "speechiness_tier",
                 "major_minor_flag",
-                "source_dataset",
             ],
         },
     }
