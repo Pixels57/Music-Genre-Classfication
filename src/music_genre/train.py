@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import nullcontext
 import itertools
 import json
 import logging
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 

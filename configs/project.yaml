@@ -67,7 +67,6 @@ features:
     - acousticness_bucket
     - instrumentalness_flag
     - valence_bucket
-    - source_dataset
 
 models:
   train:

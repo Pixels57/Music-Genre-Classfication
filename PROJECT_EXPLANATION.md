@@ -50,7 +50,7 @@ The current cleaned dataset has:
 
 ```text
 100,008 cleaned rows
-16 usable model features
+37 configured model input features after feature engineering
 3 real-world sources
 ```
 
@@ -110,7 +110,7 @@ make train
 make evaluate
 make pipeline
 make dashboard
-make pipeline-serve
+make serve
 make test
 make lint
 ```
@@ -321,6 +321,46 @@ This file controls:
 
 The reason we use a config file is reproducibility. Instead of hardcoding paths and model settings in many Python files, they are centralized in one place.
 
+## 6.1 End-To-End Phase Walkthrough
+
+For the TA discussion, the project can be explained as a sequence of phases:
+
+1. Problem definition:
+   We define the task as supervised multi-class classification. The input is tabular audio and metadata features. The output is one genre family per song.
+
+2. Data acquisition:
+   We collect Spotify as the main labeled training source, then add FMA and GTZAN as external real-world sources.
+
+3. Data integration:
+   Each source has different column names and different feature availability. The data pipeline converts them into one common schema so the rest of the code can treat them consistently.
+
+4. Data cleaning:
+   The pipeline removes or fixes rows that would make training unreliable, such as duplicate tracks, missing genre labels, impossible durations, invalid tempo values, and invalid feature ranges.
+
+5. Label harmonization:
+   Raw genre labels are mapped into broader genre families. This reduces noise because the original labels include very specific subgenres and mood/context labels.
+
+6. Feature engineering:
+   The feature pipeline creates new variables that combine existing audio features, such as energy/acousticness balance and danceability/valence interaction.
+
+7. Splitting:
+   Spotify rows are split into train, validation, and test. FMA and GTZAN rows are kept as an external split to measure generalization outside Spotify.
+
+8. Preprocessing:
+   Numerical values are imputed and scaled. Categorical values are imputed and one-hot encoded. This happens inside scikit-learn pipelines to avoid manual preprocessing mistakes.
+
+9. Modeling:
+   Five classifiers are trained and compared: Dummy, Logistic Regression, Random Forest, Gradient Boosting, and Linear SVM.
+
+10. Experiment tracking:
+   MLflow records model parameters, metrics, artifacts, confusion matrices, and classification reports.
+
+11. Evaluation:
+   The best validation model is evaluated on the held-out Spotify test split and on the external FMA/GTZAN split.
+
+12. Dashboard and reporting:
+   Streamlit shows dataset summaries and model results in a visual form that is easier to discuss with stakeholders.
+
 ## 7. Data Pipeline
 
 The data pipeline is implemented in:
@@ -356,7 +396,9 @@ The data pipeline:
 
 ### 7.2 Data Cleaning
 
-The cleaning stage handles:
+The cleaning stage is important because machine learning models assume that the training data is reasonably valid and consistent. If impossible values remain in the data, the model can learn patterns that are only artifacts of bad rows.
+
+The cleaning stage handles these cases:
 
 - duplicate track/source pairs
 - missing target labels
@@ -366,7 +408,20 @@ The cleaning stage handles:
 - invalid keys, modes, and time signatures
 - rare classes below the configured minimum count
 
-Important duration rules:
+Detailed cleaning rules:
+
+1. Missing or blank genre labels are removed.
+   The model cannot train without a target label, so rows without `track_genre` are unusable for supervised classification.
+
+2. Duplicate rows are removed using the pair:
+
+```text
+source_dataset + track_id
+```
+
+This avoids counting the same track twice inside the same source.
+
+3. Known durations must be within the configured valid range:
 
 ```text
 minimum duration: 30 seconds
@@ -374,6 +429,42 @@ maximum duration: 20 minutes
 ```
 
 These rules remove tracks that are probably intros, skits, corrupted rows, or very long recordings that would distort duration features.
+
+4. Missing durations from external sources are not automatically dropped.
+   FMA and GTZAN do not always provide every Spotify-style column. Dropping every row with a missing feature would remove most external data. Instead, missing feature values are handled later by imputation in the feature pipeline.
+
+5. Probability-like audio features must stay between 0 and 1.
+   This applies to features such as:
+
+- `danceability`
+- `energy`
+- `speechiness`
+- `acousticness`
+- `instrumentalness`
+- `liveness`
+- `valence`
+
+If a value is outside the valid range, it is treated as missing because it is not a valid Spotify-style feature value.
+
+6. Tempo values less than or equal to zero are treated as missing.
+   A song cannot have a real tempo of `0` BPM in this context, so zero tempo usually means missing or invalid data.
+
+7. Musical key must be between 0 and 11.
+   Spotify encodes pitch class as numbers from 0 to 11. Values outside that range are invalid.
+
+8. Mode must be either 0 or 1.
+   Spotify mode is binary: minor or major.
+
+9. Time signature must be in a reasonable range.
+   The project accepts values from 3 to 7 because those cover normal time signatures in this dataset and avoid corrupted values.
+
+10. Raw genres are mapped into `genre_family`.
+    Rows whose labels cannot be mapped are removed because they do not fit the shared taxonomy.
+
+11. Very rare classes are dropped.
+    Classes below the configured minimum count are removed because there are not enough examples for reliable training or evaluation.
+
+The important design choice is that the cleaning step does not simply drop every row with any missing value. That would be too aggressive because FMA and GTZAN naturally have missing Spotify-specific fields. Instead, invalid values are cleaned, and reasonable missing values are imputed later during preprocessing.
 
 ### 7.3 Validation Report
 
@@ -496,7 +587,6 @@ Important original numerical features:
 Important categorical features:
 
 - `explicit`
-- `source_dataset`
 
 ### 9.2 Engineered Features
 
@@ -585,6 +675,29 @@ Purpose:
 
 Major/minor mode can relate to mood and genre style.
 
+#### Additional interaction and bucket features
+
+The final feature set also includes extra engineered features that helped improve the model from the earlier 42% range to about 60% test accuracy:
+
+- `tempo_normalized`: rescales tempo so tempo patterns are easier to compare.
+- `energy_danceability_score`: captures songs that are both energetic and danceable.
+- `acoustic_instrumental_score`: captures tracks that are acoustic and instrumental.
+- `speech_energy_score`: helps identify speech-heavy but energetic tracks.
+- `valence_energy_score`: captures positive/high-energy songs.
+- `liveness_energy_score`: captures energetic live-performance signals.
+- `acoustic_energy_balance`: captures whether a track is more acoustic or more energetic.
+- `tempo_energy_score`: combines speed and energy.
+- `popularity_energy_score`: combines popularity with energy.
+- `duration_minutes`: makes duration easier to interpret than milliseconds.
+- `tempo_bucket`: groups tempo into slow, medium, and fast patterns.
+- `popularity_bucket`: groups tracks by popularity level.
+- `energy_bucket`: groups low, medium, and high energy.
+- `acousticness_bucket`: groups tracks by acoustic level.
+- `instrumentalness_flag`: marks likely instrumental tracks.
+- `valence_bucket`: groups mood/positivity levels.
+
+These features are useful because genre is rarely explained by one column alone. For example, electronic, rock, pop, and Latin tracks can all be energetic, but their combinations of tempo, acousticness, danceability, and valence are different. Interaction features expose these combinations directly to the models.
+
 ### 9.3 Preprocessing
 
 The project uses scikit-learn preprocessing pipelines.
@@ -666,7 +779,7 @@ The dummy model predicts the most frequent class.
 
 Purpose:
 
-It gives a minimum baseline. Any serious model should outperform it.
+It gives a minimum baseline. Any serious model should outperform it. In this project, the dummy model gets about 23% validation accuracy because it mostly predicts the largest class. This proves that the 60% Random Forest result is not just caused by class imbalance.
 
 ### 11.2 Logistic Regression
 
@@ -676,6 +789,10 @@ Purpose:
 
 It is simple, explainable, and works well as a classical baseline for classification.
 
+Why it is limited here:
+
+Logistic Regression learns mostly linear decision boundaries. Music genres overlap in nonlinear ways, such as high energy plus low acousticness plus high danceability. A linear model can learn some useful patterns, but it cannot naturally capture all combinations between features.
+
 ### 11.3 Random Forest
 
 Random Forest combines many decision trees.
@@ -683,6 +800,20 @@ Random Forest combines many decision trees.
 Purpose:
 
 It can capture nonlinear relationships and feature interactions.
+
+Current best model:
+
+```text
+random_forest_1
+```
+
+Why it fits this project:
+
+- It works well on tabular data.
+- It can use both numeric and one-hot encoded categorical features.
+- It handles threshold-like patterns well, such as high tempo or low acousticness.
+- It captures feature interactions without manually writing every possible combination.
+- It reduces overfitting compared with a single decision tree by averaging many trees.
 
 ### 11.4 Gradient Boosting
 
@@ -692,11 +823,11 @@ Purpose:
 
 It often performs well on tabular data.
 
-Current best model:
+In an earlier run, Gradient Boosting was the best model at about 42% test accuracy. After improving the genre mapping and engineered features, Random Forest became the best model at about 60% test accuracy.
 
-```text
-gradient_boosting_1
-```
+Why it did not win in the current run:
+
+The configured Gradient Boosting model uses relatively shallow trees and only 50 estimators. This makes it more conservative. It still improves strongly over the dummy and linear models, but the current Random Forest captures more detailed nonlinear patterns in this dataset.
 
 ### 11.5 Linear SVM
 
@@ -705,6 +836,34 @@ Linear SVM tries to find separating hyperplanes between classes.
 Purpose:
 
 It is useful for high-dimensional feature spaces after one-hot encoding.
+
+Why it is limited here:
+
+The Linear SVM is also linear, so it has the same main limitation as Logistic Regression. It can separate classes with a strong linear margin, but many genre boundaries are not linear. In addition, the current Linear SVM does not expose class probabilities, so probability-based metrics such as top-3 accuracy and high-confidence accuracy are not available for that model.
+
+### 11.6 Why Random Forest Performed Best
+
+Random Forest performed best because the data is tabular and the useful patterns are mostly nonlinear.
+
+Examples:
+
+- Rock and electronic can both have high energy, but electronic is often more danceable and less acoustic.
+- Acoustic, folk, and country may overlap with pop in valence, but differ in acousticness and instrumentation.
+- Ambient and chill tracks may have lower energy and different tempo patterns.
+- Latin/world tracks can overlap with pop and dance music, so combinations of rhythm-related features matter.
+
+A linear model tries to separate classes using weighted sums of features. That is useful but limited. A Random Forest uses many decision trees, and each tree can split the data using different feature thresholds. This makes it better at learning rules such as:
+
+```text
+if energy is high
+and acousticness is low
+and danceability is high
+then electronic is more likely
+```
+
+The model also benefits from the engineered bucket features because decision trees naturally work well with thresholded categories.
+
+The result is not perfect because genre labels are subjective and overlapping, but Random Forest is the best current tradeoff between performance, training cost, and explainability.
 
 ## 12. Experiment Tracking With MLflow
 
@@ -807,7 +966,7 @@ This metric helps estimate how often the model makes mistakes that could badly a
 The current best model is:
 
 ```text
-gradient_boosting_1
+random_forest_1
 ```
 
 ### 14.1 Validation Performance
@@ -815,13 +974,25 @@ gradient_boosting_1
 From `reports/training_summary.json`:
 
 ```text
-accuracy:                      0.4284
-macro_f1:                      0.3190
-weighted_f1:                   0.4046
-costly_misclassification_rate: 0.0473
-high_confidence_accuracy:      0.8617
-top_3_accuracy:                0.6950
+accuracy:                      0.6065
+macro_f1:                      0.5738
+weighted_f1:                   0.6003
+costly_misclassification_rate: 0.0558
+high_confidence_accuracy:      0.9160
+top_3_accuracy:                0.8572
 ```
+
+### 14.1.1 Validation Model Comparison
+
+From the latest training run:
+
+| Model | Validation Accuracy | Macro F1 | Main Interpretation |
+| --- | ---: | ---: | --- |
+| Dummy | 0.2313 | 0.0417 | Predicts the largest class and acts as the minimum baseline. |
+| Logistic Regression | 0.4133 | 0.3857 | Learns useful linear patterns but misses nonlinear genre interactions. |
+| Random Forest | 0.6065 | 0.5738 | Best current model because it captures nonlinear feature thresholds and interactions. |
+| Gradient Boosting | 0.5023 | 0.4330 | Strong tabular model, but current shallow configuration is more conservative than Random Forest. |
+| Linear SVM | 0.4363 | 0.3818 | Better than baseline but limited by linear decision boundaries. |
 
 ### 14.2 Test Performance
 
@@ -830,12 +1001,12 @@ From `reports/evaluation_metrics.json`:
 ```text
 test rows: 13,448
 
-accuracy:                      0.4268
-macro_f1:                      0.3267
-weighted_f1:                   0.4037
-costly_misclassification_rate: 0.0474
-high_confidence_accuracy:      0.8713
-top_3_accuracy:                0.6902
+accuracy:                      0.6028
+macro_f1:                      0.5648
+weighted_f1:                   0.5963
+costly_misclassification_rate: 0.0568
+high_confidence_accuracy:      0.9192
+top_3_accuracy:                0.8509
 ```
 
 ### 14.3 External Source Performance
@@ -845,12 +1016,12 @@ External data is FMA + GTZAN.
 ```text
 external rows: 10,355
 
-accuracy:                      0.2168
-macro_f1:                      0.0408
-weighted_f1:                   0.2225
-costly_misclassification_rate: 0.0773
-high_confidence_accuracy:      0.6829
-top_3_accuracy:                0.3553
+accuracy:                      0.2423
+macro_f1:                      0.1253
+weighted_f1:                   0.2594
+costly_misclassification_rate: 0.1000
+high_confidence_accuracy:      0.7401
+top_3_accuracy:                0.5652
 ```
 
 ### 14.4 How To Interpret These Results
@@ -925,7 +1096,7 @@ python -m poetry install
 Run everything:
 
 ```powershell
-make pipeline-serve
+make serve
 ```
 
 If `make` is not available, run manually:
@@ -1028,19 +1199,21 @@ Spotify is used as the primary training dataset. FMA and GTZAN are integrated as
 
 ### Data Cleaning
 
-We remove duplicates, invalid durations, invalid tempos, invalid feature ranges, and rare classes below the configured threshold. We map raw labels into genre families.
+We clean the raw data before modeling because invalid rows can create fake patterns. The pipeline removes duplicate track/source pairs, removes rows without a target genre, validates duration limits, treats zero or negative tempo as missing, validates audio-feature ranges, validates key/mode/time signature values, maps raw labels into `genre_family`, and removes classes below the configured threshold.
+
+We do not drop every row with missing feature values. That is intentional because FMA and GTZAN do not contain all Spotify-style columns. Missing feature values are handled later by the scikit-learn imputation step.
 
 ### Feature Engineering
 
-We create interaction and transformed features such as energy/acoustic ratio, dance-valence score, loudness normalization, duration buckets, speechiness tiers, and major/minor flag.
+We create interaction and transformed features such as energy/acoustic ratio, dance-valence score, loudness normalization, duration buckets, speechiness tiers, major/minor flag, tempo buckets, popularity buckets, energy/acousticness buckets, and combined energy/tempo/valence scores. These help because genre is usually based on combinations of audio properties, not one feature alone.
 
 ### Modeling
 
-We train five classifiers and track them with MLflow. Gradient Boosting currently performs best on the validation split.
+We train five classifiers and track them with MLflow. Dummy gives the baseline, Logistic Regression and Linear SVM test linear boundaries, Gradient Boosting tests sequential tree learning, and Random Forest tests nonlinear bagged tree learning. Random Forest currently performs best on the validation split.
 
 ### Evaluation
 
-The model achieves moderate Spotify test performance and lower external performance. The lower external score shows dataset shift across music sources.
+The model achieves moderate Spotify test performance: about 60% accuracy, 56% macro F1, and 85% top-3 accuracy on the held-out Spotify test split. External performance is lower because FMA and GTZAN have different feature distributions and missing Spotify-style fields. This lower external score demonstrates dataset shift across music sources.
 
 ### Business Interpretation
 
@@ -1109,11 +1282,19 @@ Because FMA and GTZAN come from different distributions. They do not perfectly m
 
 ### Q: What is the best model?
 
-The current best validation model is Gradient Boosting.
+The current best validation model is Random Forest.
 
-### Q: Is 42% accuracy bad?
+### Q: Why did Random Forest win?
 
-Not necessarily. There are many genre families, genres overlap, and labels are subjective. The model is much better than the dummy baseline. Top-3 accuracy is around 69%, which is useful for recommendation/tag suggestion workflows.
+Random Forest won because the strongest genre patterns are nonlinear. For example, high energy alone is not enough to identify a genre, but high energy combined with low acousticness, high danceability, and a tempo pattern can be useful. Decision trees naturally learn these threshold combinations, and Random Forest averages many trees to make the result more stable.
+
+### Q: Is 60% accuracy good?
+
+It is a reasonable result for this problem. There are nine genre families, genres overlap, and labels are subjective. The model is much better than the dummy baseline. Top-3 accuracy is around 85%, which is useful for recommendation/tag suggestion workflows.
+
+### Q: Why not train on Spotify, FMA, and GTZAN together?
+
+Spotify has the most complete feature set and consistent labels for this project. FMA and GTZAN have different features and different collection biases. Keeping them external gives a more honest test of how the model behaves on unfamiliar data.
 
 ### Q: What is the business use?
 
@@ -1158,4 +1339,4 @@ Report side still needed:
 
 ## 22. Short Summary
 
-This project predicts music genre families from audio features. Spotify is used as the main supervised training dataset. FMA and GTZAN are integrated as external sources. The pipeline cleans and validates data, engineers features, trains five classifiers, tracks experiments with MLflow, evaluates the best model, and presents results in a Streamlit dashboard. The best current model is Gradient Boosting, with moderate Spotify test performance and weaker external performance due to dataset shift.
+This project predicts music genre families from audio features. Spotify is used as the main supervised training dataset. FMA and GTZAN are integrated as external sources. The pipeline cleans and validates data, engineers features, trains five classifiers, tracks experiments with MLflow, evaluates the best model, and presents results in a Streamlit dashboard. The best current model is Random Forest, with about 60% Spotify test accuracy and weaker external performance due to dataset shift.

@@ -9,7 +9,7 @@ def config() -> dict:
     return {
         "features": {
             "numeric": ["energy", "acousticness", "energy_acoustic_ratio"],
-            "categorical": ["duration_bucket", "speechiness_tier", "major_minor_flag", "source_dataset"],
+            "categorical": ["duration_bucket", "speechiness_tier", "major_minor_flag"],
         }
     }
 

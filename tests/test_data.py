@@ -15,7 +15,7 @@ def sample_config() -> dict:
             "min_rows_after_cleaning": 3,
             "min_features_after_cleaning": 7,
         },
-        "features": {"numeric": ["energy"], "categorical": ["source_dataset"]},
+        "features": {"numeric": ["energy"], "categorical": ["duration_bucket"]},
         "genre_mapping": {"rock": ["rock"], "pop": ["pop"]},
     }
 
