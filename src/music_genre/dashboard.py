@@ -71,11 +71,20 @@ def _search_test_tracks(test_df: pd.DataFrame, query: str, *, limit: int = 40) -
     return test_df.loc[mask].head(limit).reset_index(drop=True)
 
 
+def _display_cell(v: object) -> str:
+    """Arrow-friendly string for mixed-type feature columns in st.dataframe."""
+    if pd.isna(v):
+        return ""
+    return str(v)
+
+
 def _audio_feature_display_frame(row: pd.Series) -> pd.DataFrame:
     present = [c for c in _AUDIO_FEATURE_COLUMNS if c in row.index and pd.notna(row.get(c))]
     if not present:
         return pd.DataFrame()
-    return pd.DataFrame({"feature": present, "value": [row[c] for c in present]}).set_index("feature")
+    return pd.DataFrame(
+        {"feature": present, "value": [_display_cell(row[c]) for c in present]}
+    ).set_index("feature")
 
 
 def _render_test_set_predictor(config: dict) -> None:
@@ -151,14 +160,16 @@ def _render_test_set_predictor(config: dict) -> None:
         if audio_tbl.empty:
             st.info("No standard audio columns to display for this row.")
         else:
-            st.dataframe(audio_tbl, use_container_width=True)
+            st.dataframe(audio_tbl, width="stretch")
 
         with st.expander("Other features the model uses"):
             other = [c for c in feats if c not in _AUDIO_FEATURE_COLUMNS]
             if other:
                 st.dataframe(
-                    pd.DataFrame({"feature": other, "value": [row.get(c) for c in other]}).set_index("feature"),
-                    use_container_width=True,
+                    pd.DataFrame(
+                        {"feature": other, "value": [_display_cell(row.get(c)) for c in other]}
+                    ).set_index("feature"),
+                    width="stretch",
                 )
 
         try:
@@ -186,7 +197,7 @@ def _render_test_set_predictor(config: dict) -> None:
                 pd.DataFrame(
                     {target: [classes[i] for i in top], "probability": [float(proba[i]) for i in top]}
                 ),
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
 
@@ -225,7 +236,7 @@ def render_dashboard(config_path: str | Path = "configs/project.yaml") -> None:
             counts.columns = [target, "tracks"]
             st.plotly_chart(
                 px.bar(counts, x=target, y="tracks", title="Class Distribution"),
-                use_container_width=True,
+                width="stretch",
             )
         with right:
             st.plotly_chart(
@@ -237,7 +248,7 @@ def render_dashboard(config_path: str | Path = "configs/project.yaml") -> None:
                     hover_data=["track_name", "artists"],
                     title="Energy vs Acousticness",
                 ),
-                use_container_width=True,
+                width="stretch",
             )
 
         st.plotly_chart(
@@ -248,7 +259,7 @@ def render_dashboard(config_path: str | Path = "configs/project.yaml") -> None:
                 color=target,
                 title=f"Danceability by {target_label}",
             ),
-            use_container_width=True,
+            width="stretch",
         )
 
         if metrics:
@@ -257,7 +268,7 @@ def render_dashboard(config_path: str | Path = "configs/project.yaml") -> None:
             for split_name, payload in metrics.items():
                 for metric_name, value in payload.get("metrics", {}).items():
                     metric_rows.append({"split": split_name, "metric": metric_name, "value": value})
-            st.dataframe(pd.DataFrame(metric_rows), use_container_width=True)
+            st.dataframe(pd.DataFrame(metric_rows), width="stretch")
 
     _render_test_set_predictor(config)
 
