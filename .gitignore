@@ -7,6 +7,8 @@ __pycache__/
 htmlcov/
 dist/
 mlruns/
+# Training run artifacts; only `best_model.joblib` is meant for Git (see .gitattributes + LFS).
 models/*.joblib
+!models/best_model.joblib
 reports/*.json
 reports/*.png

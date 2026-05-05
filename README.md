@@ -96,13 +96,13 @@ To test the workflow on GitHub:
 
 1. Push the repo to GitHub.
 2. [Streamlit Community Cloud](https://streamlit.io/cloud) → **New app** → select repo/branch.
-3. **Main file:** `src/music_genre/dashboard.py` · **Python:** 3.11.
+3. **Main file:** **`app.py`** (repo root — it fixes `sys.path` before importing `music_genre`; avoids Cloud import errors). **Python:** 3.11.
 4. Add a root **`requirements.txt`**: install the export plugin if needed (`poetry self add poetry-plugin-export`), then  
    `poetry export -f requirements.txt --output requirements.txt --without-hashes --only main`  
    Commit and push `requirements.txt`.
 5. Include **`models/best_model.joblib`** and **`data/processed/`** in the deployed tree (commit, Git LFS, or download at startup) so charts and the test-set demo work.
 
-`dashboard.py` prepends **`src/`** to `sys.path` so `import music_genre` works on Cloud (which only runs `pip install -r requirements.txt` and does not run `poetry install`). Alternatively append **`-e .`** to `requirements.txt` to install the package in editable mode.
+Use **`app.py`** as the Streamlit entry point. Alternatively append **`-e .`** to `requirements.txt` so `pip` installs the project as a package (then `src/music_genre/dashboard.py` works too).
 
 ## Outputs
 
@@ -130,3 +130,19 @@ Each run logs accuracy, macro F1, weighted F1, top-3 accuracy when class probabi
 ## Notes for Reproducibility
 
 Raw data is ignored by Git because the datasets are large. Keep the source URLs and citations in the final report, and place local copies under `data/raw` before running the pipeline.
+
+### Shipping `models/best_model.joblib` (Git LFS)
+
+The trained **`best_model.joblib`** is often hundreds of MB; GitHub requires **Git LFS** for files over ~100 MB.
+
+1. Install Git LFS once: `brew install git-lfs` (macOS), then `git lfs install`.
+2. This repo already lists **`models/best_model.joblib`** in **`.gitattributes`** for LFS.
+3. `.gitignore` ignores other **`models/*.joblib`** run artifacts so only **`best_model.joblib`** is tracked.
+
+```powershell
+git add .gitattributes models/best_model.joblib
+git commit -m "Track best model via Git LFS"
+git push
+```
+
+Watch GitHub **LFS bandwidth/storage** quotas on free accounts.
