@@ -27,7 +27,7 @@ test:
 	$(POETRY) run pytest
 
 lint:
-	$(POETRY) run ruff check src tests
+	$(POETRY) run ruff check app.py src tests
 
 build:
 	$(POETRY) check --lock

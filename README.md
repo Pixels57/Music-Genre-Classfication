@@ -74,7 +74,13 @@ On pull requests and pushes to `main`, the CI job:
 - builds the Python package
 - uploads `coverage.xml` and `dist/` as CI artifacts
 
+On every **push to `main`**, after CI passes, the **Deploy gate** job installs from **`requirements.txt`** (the same install path Streamlit Community Cloud uses), compiles **`app.py`**, and imports the dashboard module so broken deploys are caught before Cloud rebuilds.
+
 On pushes to `main` and manual workflow runs, the delivery job also uploads a submission artifact named `music-genre-classification-submission`. The artifact contains the code, configs, reports written in Markdown, tests, README, and project metadata. Large local outputs such as raw datasets, generated model files, MLflow runs, and generated JSON reports are excluded because they can be recreated with `make serve`.
+
+### Continuous deployment (Streamlit)
+
+[Streamlit Community Cloud](https://streamlit.io/cloud) redeploys the app when you push to the branch the app is pinned to (often `main`). Connect the GitHub repo once, set **Main file** to **`app.py`**, Python **3.11**, and keep **`requirements.txt`** committed (refresh it after dependency changes with `poetry export -f requirements.txt --output requirements.txt --without-hashes --only main`). You do not need a separate deploy token for basic GitHub → Cloud CD.
 
 Before pushing, run the local equivalent of the main CI checks:
 
