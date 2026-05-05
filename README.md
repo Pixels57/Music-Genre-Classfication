@@ -92,6 +92,18 @@ To test the workflow on GitHub:
 6. If the run is on `main` or manually triggered, confirm that **Build submission artifact** passes.
 7. Download artifacts from the workflow summary to inspect `ci-artifacts` and `music-genre-classification-submission`.
 
+## Deploy the dashboard (Streamlit Community Cloud)
+
+1. Push the repo to GitHub.
+2. [Streamlit Community Cloud](https://streamlit.io/cloud) → **New app** → select repo/branch.
+3. **Main file:** `src/music_genre/dashboard.py` · **Python:** 3.11.
+4. Add a root **`requirements.txt`**: install the export plugin if needed (`poetry self add poetry-plugin-export`), then  
+   `poetry export -f requirements.txt --output requirements.txt --without-hashes --only main`  
+   Commit and push `requirements.txt`.
+5. Include **`models/best_model.joblib`** and **`data/processed/`** in the deployed tree (commit, Git LFS, or download at startup) so charts and the test-set demo work.
+
+`dashboard.py` prepends **`src/`** to `sys.path` so `import music_genre` works on Cloud (which only runs `pip install -r requirements.txt` and does not run `poetry install`). Alternatively append **`-e .`** to `requirements.txt` to install the package in editable mode.
+
 ## Outputs
 
 - `data/interim/integrated_tracks.csv`: cleaned, harmonized data.

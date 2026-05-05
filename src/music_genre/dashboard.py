@@ -2,14 +2,23 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
-import joblib
-import pandas as pd
-import streamlit as st
+# Streamlit Cloud installs deps from requirements.txt only; it does not run `poetry install`,
+# so the `music_genre` package under `src/` is not on sys.path. Put `src/` first when needed.
+_src_dir = Path(__file__).resolve().parents[1]
+if _src_dir.name == "src" and (_src_dir / "music_genre").is_dir():
+    src_str = str(_src_dir)
+    if src_str not in sys.path:
+        sys.path.insert(0, src_str)
 
-from music_genre.config import load_config
-from music_genre.features import add_engineered_features, feature_columns
+import joblib  # noqa: E402
+import pandas as pd  # noqa: E402
+import streamlit as st  # noqa: E402
+
+from music_genre.config import load_config  # noqa: E402
+from music_genre.features import add_engineered_features, feature_columns  # noqa: E402
 
 # Spotify-style numeric audio descriptors (display only; the model uses all `feature_columns`).
 _AUDIO_FEATURE_COLUMNS: tuple[str, ...] = (
